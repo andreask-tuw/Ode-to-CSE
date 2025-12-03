@@ -74,8 +74,40 @@ namespace ASC_ode
   };
 
 
-  
+  class CrankNicholson : public TimeStepper
+  {
+    std::shared_ptr<NonlinearFunction> m_equ;
+    std::shared_ptr<Parameter> m_tau;
+    std::shared_ptr<ConstantFunction> m_yold;
+    std::shared_ptr<ConstantFunction> m_fold;
+  public:
+    CrankNicholson(std::shared_ptr<NonlinearFunction> rhs) 
+    : TimeStepper(rhs), m_tau(std::make_shared<Parameter>(0.0)) 
+    {
+      m_yold = std::make_shared<ConstantFunction>(rhs->dimX());
+      m_fold = std::make_shared<ConstantFunction>(rhs->dimF());
+      auto ynew = std::make_shared<IdentityFunction>(rhs->dimX());
+      // m_equ = ynew - m_yold - (m_tau) * 0.5 * (m_rhs + (m_yold + m_rhs));
+      // Equation is: y_new - y_old - 0.5*tau*(f(y_old) + f(y_new)) = 0
+      m_equ = ynew - m_yold - m_tau * (0.5 * (m_fold + m_rhs));
+      
+    }
+      // Suggestion:
+      // m_equ = ynew - m_yold - (m_tau) * 0.5 * (derivative + m_rhs);
 
+  
+    
+    void doStep(double tau, VectorView<double> y) override
+    {
+      Vector<> fold_val(m_rhs->dimF());
+      m_rhs->evaluate(y, fold_val);
+      m_fold->set(fold_val);
+
+      m_yold->set(y);
+      m_tau->set(tau);
+      NewtonSolver(m_equ, y);
+    }
+  };
 }
 
 

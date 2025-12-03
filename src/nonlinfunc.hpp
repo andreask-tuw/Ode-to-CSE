@@ -140,6 +140,12 @@ namespace ASC_ode
   };
 
   inline auto operator* (std::shared_ptr<Parameter> parama, 
+                         double a)
+  {
+    return std::make_shared<Parameter>(a * parama->get());
+  }
+
+  inline auto operator* (std::shared_ptr<Parameter> parama, 
                          std::shared_ptr<NonlinearFunction> f)
   {
     return std::make_shared<ScaleFunction>(f, parama);
