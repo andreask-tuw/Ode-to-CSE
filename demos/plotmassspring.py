@@ -1,6 +1,6 @@
 import numpy as np
+
 data = np.loadtxt('output_test_ode.txt', usecols=(0, 1, 2))
-# print (data)
 
 import matplotlib.pyplot as plt
 
