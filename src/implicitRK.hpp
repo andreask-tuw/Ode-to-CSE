@@ -33,7 +33,7 @@ namespace ASC_ode {
       m_equ = knew - Compose(multiple_rhs, m_yold+m_tau*std::make_shared<MatVecFunc>(a, m_n));
     }
 
-    void DoStep(double tau, VectorView<double> y) override
+    void doStep(double tau, VectorView<double> y) override
     {
       for (int j = 0; j < m_stages; j++)
         m_y.range(j*m_n, (j+1)*m_n) = y;
@@ -178,7 +178,7 @@ void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double
 /*
   given Runge-Kutta nodes c, compute the coefficients a and b
 */
-auto ComputeABfromC (const Vector<> & c)
+auto computeABfromC (const Vector<> & c)
 {
   int s = c.size();
   Matrix<> M(s, s);

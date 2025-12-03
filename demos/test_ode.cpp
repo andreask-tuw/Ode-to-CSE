@@ -61,7 +61,7 @@ int main()
   // RungeKutta stepper(rhs, Gauss2a, Gauss2b, Gauss2c);
 
   // Gauss3c .. points tabulated, compute a,b:
-  auto [Gauss3a,Gauss3b] = ComputeABfromC (Gauss3c);
+  auto [Gauss3a,Gauss3b] = computeABfromC (Gauss3c);
   ImplicitRungeKutta stepper(rhs, Gauss3a, Gauss3b, Gauss3c);
 
 
@@ -71,7 +71,7 @@ int main()
   Vector<> c(stages), b1(stages);
   GaussLegendre(c, b1);
 
-  auto [a, b] = ComputeABfromC(c);
+  auto [a, b] = computeABfromC(c);
   ImplicitRungeKutta stepper(rhs, a, b, c);
   */
 
@@ -81,7 +81,7 @@ int main()
   Vector<> c(stages), b1(stages);
   GaussRadau(c, b1);
 
-  auto [a, b] = ComputeABfromC(c);
+  auto [a, b] = computeABfromC(c);
   ImplicitRungeKutta stepper(rhs, a, b, c);
   */
 
@@ -92,7 +92,7 @@ int main()
 
   for (int i = 0; i < steps; i++)
   {
-     stepper.DoStep(tau, y);
+     stepper.doStep(tau, y);
 
      std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
      outfile << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
