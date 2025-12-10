@@ -1,4 +1,6 @@
 #include <iostream>
+#include <vector>
+#include <fstream>
 #include <autodiff.hpp>
 
 
@@ -72,5 +74,24 @@ int main()
 
     std::cout << "sin(addx) = " << sin(addx) << std::endl;
   }
+
+  // Legendre Polynomials
+  std::ofstream out("legendre.txt");
+  int N = 100;
+  for (int i = 0; i <= N; ++i)
+  {
+    double x = -1.0 + 2.0 * i / N;
+    AutoDiff<1> adx = Variable<0>(x);
+    std::vector<AutoDiff<1>> P;
+    LegendrePolynomials(5, adx, P);
+    
+    out << x;
+    for (const auto& p : P)
+      out << " " << p.value();
+    for (const auto& p : P)
+      out << " " << p.deriv()[0];
+    out << "\n";
+  }
+
   return 0;
 }

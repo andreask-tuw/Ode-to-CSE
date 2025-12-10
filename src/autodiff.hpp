@@ -4,7 +4,7 @@
 #include <cstddef> 
 #include <ostream> 
 #include <cmath>   
-#include <array>  
+#include <array>
 #include "vector.hpp"
 
 namespace ASC_ode
@@ -79,6 +79,24 @@ namespace ASC_ode
         result.deriv()[i] = a.deriv()[i] + b.deriv()[i];
        return result;
    }
+
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> operator- (const AutoDiff<N, T>& a, const AutoDiff<N, T>& b)
+  {
+     AutoDiff<N, T> result(a.value() - b.value());
+     for (size_t i = 0; i < N; i++)
+        result.deriv()[i] = a.deriv()[i] - b.deriv()[i];
+       return result;
+   }
+
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> operator/ (const AutoDiff<N, T>& a, const AutoDiff<N, T>& b)
+  {
+      AutoDiff<N, T> result(a.value() / b.value());
+      for (size_t i = 0; i < N; i++)
+        result.deriv()[i] = (a.deriv()[i] * b.value() - a.value() * b.deriv()[i]) / (b.value() * b.value());
+      return result;
+  }
 
   template <size_t N, typename T = double>
   auto operator+ (T a, const AutoDiff<N, T>& b) { return AutoDiff<N, T>(a) + b; }
