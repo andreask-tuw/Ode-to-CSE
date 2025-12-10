@@ -5,7 +5,7 @@
 #include <ostream> 
 #include <cmath>   
 #include <array>  
-
+#include "vector.hpp"
 
 namespace ASC_ode
 {
@@ -80,31 +80,77 @@ namespace ASC_ode
        return result;
    }
 
-   template <size_t N, typename T = double>
-   auto operator+ (T a, const AutoDiff<N, T>& b) { return AutoDiff<N, T>(a) + b; }
+  template <size_t N, typename T = double>
+  auto operator+ (T a, const AutoDiff<N, T>& b) { return AutoDiff<N, T>(a) + b; }
 
+  template <size_t N, typename T = double>
+  auto operator- (T a, const AutoDiff<N, T>& b) { return AutoDiff<N, T>(a) - b; }
 
-   template <size_t N, typename T = double>
-   AutoDiff<N, T> operator* (const AutoDiff<N, T>& a, const AutoDiff<N, T>& b)
-   {
-       AutoDiff<N, T> result(a.value() * b.value());
-       for (size_t i = 0; i < N; i++)
-          result.deriv()[i] = a.deriv()[i] * b.value() + a.value() * b.deriv()[i];
-       return result;
-   }
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> operator* (const AutoDiff<N, T>& a, const AutoDiff<N, T>& b)
+  {
+      AutoDiff<N, T> result(a.value() * b.value());
+      for (size_t i = 0; i < N; i++)
+        result.deriv()[i] = a.deriv()[i] * b.value() + a.value() * b.deriv()[i];
+      return result;
+  }
 
-   using std::sin;
-   using std::cos;
+  using std::sin;
+  using std::cos;
+  using std::exp;
+  using std::log;
 
-   template <size_t N, typename T = double>
-   AutoDiff<N, T> sin(const AutoDiff<N, T> &a)
-   {
-       AutoDiff<N, T> result(sin(a.value()));
-       for (size_t i = 0; i < N; i++)
-           result.deriv()[i] = cos(a.value()) * a.deriv()[i];
-       return result;
-   }
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> sin(const AutoDiff<N, T> &a)
+  {
+      AutoDiff<N, T> result(sin(a.value()));
+      for (size_t i = 0; i < N; i++)
+          result.deriv()[i] = cos(a.value()) * a.deriv()[i];
+      return result;
+  }
 
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> cos(const AutoDiff<N, T> &a)
+  {
+      AutoDiff<N, T> result(cos(a.value()));
+      for (size_t i = 0; i < N; i++)
+          result.deriv()[i] = -sin(a.value()) * a.deriv()[i];
+      return result;
+  }
+
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> exp(const AutoDiff<N, T> &a)
+  {
+      AutoDiff<N, T> result(exp(a.value()));
+      for (size_t i = 0; i < N; i++)
+          result.deriv()[i] = exp(a.value()) * a.deriv()[i];
+      return result;
+  }
+
+  template <size_t N, typename T = double>
+  AutoDiff<N, T> log(const AutoDiff<N, T> &a)
+  {
+      AutoDiff<N, T> result(log(a.value()));
+      for (size_t i = 0; i < N; i++)
+          result.deriv()[i] = a.deriv()[i] / a.value();
+      return result;
+  }
+
+  template <typename T>
+  void LegendrePolynomials(int n, T x, std::vector<T>& P) 
+  {
+    if (n < 0) {
+        P.clear();
+        return;
+    }
+    P.resize(n + 1);
+    P[0] = T(1);
+    if (n == 0) return;
+    P[1] = x;
+    for (int k = 2; k <= n; ++k) {
+        P[k] = ((T(2 * k - 1) * x * P[k - 1]) - T(k - 1) * P[k - 2]) / T(k);
+    }
+}
 
 } // namespace ASC_ode
 
