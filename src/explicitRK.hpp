@@ -1,6 +1,7 @@
-#ifndef IMPLICITRK_HPP
-#define IMPLICITRK_HPP
+#ifndef EXPLICITRK_HPP
+#define EXPLICITRK_HPP
 
+#include "timestepper.hpp"
 #include <vector.hpp>
 #include <matrix.hpp>
 #include <inverse.hpp>
@@ -8,40 +9,38 @@
 namespace ASC_ode {
   using namespace nanoblas;
 
-
-
-  class ImplicitRungeKutta : public TimeStepper
+  class ExplicitRungeKutta : public TimeStepper
   {
     Matrix<> m_a;
     Vector<> m_b, m_c;
-    std::shared_ptr<NonlinearFunction> m_equ;
-    std::shared_ptr<Parameter> m_tau;
-    std::shared_ptr<ConstantFunction> m_yold;
     int m_stages;
     int m_n;
-    Vector<> m_k, m_y;
+    Vector<> m_k;
+    Vector<> m_y_tmp;
+
   public:
-    ImplicitRungeKutta(std::shared_ptr<NonlinearFunction> rhs,
+    ExplicitRungeKutta(std::shared_ptr<NonlinearFunction> rhs,
       const Matrix<> &a, const Vector<> &b, const Vector<> &c) 
     : TimeStepper(rhs), m_a(a), m_b(b), m_c(c),
-    m_tau(std::make_shared<Parameter>(0.0)),
-    m_stages(c.size()), m_n(rhs->dimX()), m_k(m_stages*m_n), m_y(m_stages*m_n)
+    m_stages(c.size()), m_n(rhs->dimX()), m_k(m_stages*m_n), m_y_tmp(m_n)
     {
-      auto multiple_rhs = make_shared<MultipleFunc>(rhs, m_stages);
-      m_yold = std::make_shared<ConstantFunction>(m_stages*m_n);
-      auto knew = std::make_shared<IdentityFunction>(m_stages*m_n);
-      m_equ = knew - Compose(multiple_rhs, m_yold+m_tau*std::make_shared<MatVecFunc>(a, m_n));
     }
 
     void doStep(double tau, VectorView<double> y) override
     {
-      for (int j = 0; j < m_stages; j++)
-        m_y.range(j*m_n, (j+1)*m_n) = y;
-      m_yold->set(m_y);
-
-      m_tau->set(tau);
-      m_k = 0.0;  
-      NewtonSolver(m_equ, m_k);
+      for (int i = 0; i < m_stages; i++)
+      {
+        m_y_tmp = y;
+        for (int j = 0; j < i; j++)
+        {
+           double val = m_a(i, j);
+           if (val != 0.0)
+             m_y_tmp += (tau * val) * m_k.range(j*m_n, (j+1)*m_n);
+        }
+        
+        auto k_i = m_k.range(i*m_n, (i+1)*m_n);
+        m_rhs->evaluate(m_y_tmp, k_i);
+      }
 
       for (int j = 0; j < m_stages; j++)
         y += tau * m_b(j) * m_k.range(j*m_n, (j+1)*m_n);
@@ -90,7 +89,7 @@ void GaussLegendre(VectorView<> x, VectorView<> w)
         pp=n*(z*p1-p2)/(z*z-1.0);
         z1=z;
         z=z1-p1/pp;   // Newton’s method.
-      } while (std::abs(z-z1) > EPS);
+      } while (abs(z-z1) > EPS);
       x[i]=xm-xl*z;      // Scale the root to the desired interval,
       x[n-1-i]=xm+xl*z;  //  and put in its symmetric counterpart.
       w[i]=2.0*xl/((1.0-z*z)*pp*pp);  // Compute the weight
@@ -119,7 +118,7 @@ void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double
     } else if (i == 1) { // Initial guess for the second largest root.
       r1=(4.1+alf)/((1.0+alf)*(1.0+0.156*alf));
       r2=1.0+0.06*(n-8.0)*(1.0+0.12*alf)/n;
-      r3=1.0+0.012*bet*(1.0+0.25*std::abs(alf))/n;
+      r3=1.0+0.012*bet*(1.0+0.25*abs(alf))/n;
       z -= (1.0-z)*r1*r2*r3;
     } else if (i == 2) { // Initial guess for the third largest root.
       r1=(1.67+0.28*alf)/(1.0+0.37*alf);
@@ -159,7 +158,7 @@ void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double
       //  a standard relation involving also p2, the polynomial of one lower order.
       z1=z;
       z=z1-p1/pp; // Newton’s formula.
-      if (std::abs(z-z1) <= EPS) break;
+      if (abs(z-z1) <= EPS) break;
     }
     if (its > MAXIT) throw("too many iterations in gaujac");
     x[i]=z;    // Store the root and the weight.
@@ -223,4 +222,4 @@ void GaussRadau (VectorView<> x, VectorView<> w)
 }
 }
 
-#endif // IMPLICITRK_HPP
+#endif // EXPLICITRK_HPP
