@@ -123,6 +123,9 @@ int main()
   // double time_const = 1/omega;
   // double R = 30, C = time_const/R;
 
+  // Gauss3c .. points tabulated, compute a,b:
+  // auto [Gauss3a,Gauss3b] = computeABfromC (Gauss3c);
+  // ImplicitRungeKutta stepper(rhs, Gauss3a, Gauss3b, Gauss3c);
 
   // Vector<> y = { 0, 0 };  // initializer list
   // auto rhs = std::make_shared<RC>(R, C, omega);
@@ -137,9 +140,6 @@ int main()
 
   // RungeKutta stepper(rhs, Gauss2a, Gauss2b, Gauss2c);
 
-  // Gauss3c .. points tabulated, compute a,b:
-  auto [Gauss3a,Gauss3b] = computeABfromC (Gauss3c);
-  ImplicitRungeKutta stepper(rhs, Gauss3a, Gauss3b, Gauss3c);
 
 
   /*
