@@ -1,5 +1,5 @@
-#ifndef Newton_h
-#define Newton_h
+#ifndef NEWTON_HPP
+#define NEWTON_HPP
 
 #include "nonlinfunc.hpp"
 #include <inverse.hpp>

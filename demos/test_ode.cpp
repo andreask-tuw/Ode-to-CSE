@@ -118,28 +118,129 @@ int main()
   int steps = 10000;
   double tau = tend/steps;
 
-  // Vector<> y = { 1, 0 };  // initializer list
-  // auto rhs = std::make_shared<MassSpring>(1.0, 1.0);
-  // double omega = 50*M_PI;
-  // double time_const = 1/omega;
-  // double R = 30, C = time_const/R;
+  Vector<> y = { 1, 0 };  // initializer list
+  Vector<> y0 = y;       // save initial condition
+  auto rhs = std::make_shared<MassSpring>(1.0, 1.0);
+
+
+  /*** EXPLICIT EULER ***/
+  ExplicitEuler stepper1(rhs);
+
+  std::string filename1 = "output_test_ode_ExplicitEuler.txt";
+  std::ofstream outfile1(filename1);
+
+  std::cout << "# method: " << "Explicit Euler" << "\n";
+  // std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+  outfile1 << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+
+  for (int i = 0; i < steps; i++)
+  {
+    stepper1.doStep(tau, y);
+    // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+    outfile1 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+  }
+
+  // reset initial condition for each method
+  y = y0;
+
+
+  /*** IMPROVED EULER ***/
+  ImprovedEuler stepper2(rhs);
+
+  std::string filename2 = "output_test_ode_ImprovedEuler.txt";
+  std::ofstream outfile2(filename2);
+
+  std::cout << "# method: " << "Improved Euler" << "\n";
+  // std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+  outfile2 << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+
+  for (int i = 0; i < steps; i++)
+  {
+    stepper2.doStep(tau, y);
+    // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+    outfile2 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+  }
+
+
+  // reset initial condition for each method
+  y = y0;
+
+
+  /*** IMPLICIT EULER ***/
+
+  ImplicitEuler stepper3(rhs);
+
+  std::string filename3 = "output_test_ode_ImplicitEuler.txt";
+  std::ofstream outfile3(filename3);
+
+  std::cout << "# method: " << "Implicit Euler" << "\n";
+  // std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+  outfile3 << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+
+  for (int i = 0; i < steps; i++)
+  {
+    stepper3.doStep(tau, y);
+    // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+    outfile3 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+  }
+
+  // reset initial condition for each method
+  y = y0;
+
+
+  /*** CRANK NICHOLSON ***/
+
+  CrankNicholson stepper4(rhs);
+
+  std::string filename4 = "output_test_ode_CrankNicholson.txt";
+  std::ofstream outfile4(filename4);
+
+  std::cout << "# method: " << "Crank Nicholson" << "\n";
+  // std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+  outfile4 << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+
+  for (int i = 0; i < steps; i++)
+  {
+    stepper4.doStep(tau, y);
+    // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+    outfile4 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+  }
+  
+
+
+  double omega = 50*M_PI;
+  double time_const = 1/omega;
+  double R = 30, C = time_const/R;
 
   // Gauss3c .. points tabulated, compute a,b:
-  // auto [Gauss3a,Gauss3b] = computeABfromC (Gauss3c);
-  // ImplicitRungeKutta stepper(rhs, Gauss3a, Gauss3b, Gauss3c);
+  auto [Gauss3a,Gauss3b] = computeABfromC (Gauss3c);
+  ImplicitRungeKutta stepper5(rhs, Gauss3a, Gauss3b, Gauss3c);
 
-  // Vector<> y = { 0, 0 };  // initializer list
-  // auto rhs = std::make_shared<RC>(R, C, omega);
+  std::string filename5 = "output_test_ode_IRK.txt";
+  std::ofstream outfile5(filename5);
 
-  Vector<> y = { 2, 0 };  // initializer list
-  auto rhs = std::make_shared<PendulumAD>(1);
+  std::cout << "# method: " << "Implicit Runge Kutta" << "\n";
+  // std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+  outfile5 << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
 
-  // ExplicitEuler stepper(rhs);
-  // ImprovedEuler stepper(rhs);
-  // ImplicitEuler stepper(rhs);
-  CrankNicholson stepper(rhs);
+  for (int i = 0; i < steps; i++)
+  {
+    stepper5.doStep(tau, y);
+    // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+    outfile5 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+  }
+
+
+  // Vector<> y_RC = { 0, 0 };  // initializer list
+  // auto rhs_RC = std::make_shared<RC>(R, C, omega);
+
+  // Vector<> y_AD = { 2, 0 };  // initializer list
+  // auto rhs_AD = std::make_shared<PendulumAD>(1);
+
 
   // RungeKutta stepper(rhs, Gauss2a, Gauss2b, Gauss2c);
+  // ImplicitRungeKutta stepper_IRK(rhs, Gauss2a, Gauss2b, Gauss2c);
+
 
 
 
@@ -164,15 +265,5 @@ int main()
   */
 
 
-  std::ofstream outfile ("output_test_ode.txt");
-  std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
-  outfile << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
-
-  for (int i = 0; i < steps; i++)
-  {
-     stepper.doStep(tau, y);
-
-     std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
-     outfile << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
-  }
+  
 }

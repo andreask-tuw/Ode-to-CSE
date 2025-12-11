@@ -1,5 +1,5 @@
-#ifndef NONLINFUNC_H
-#define NONLINFUNC_H
+#ifndef NONLINFUNC_HPP
+#define NONLINFUNC_HPP
 
 #include <cstddef>
 #include <memory>
