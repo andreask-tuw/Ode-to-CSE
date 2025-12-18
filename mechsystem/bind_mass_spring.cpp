@@ -11,6 +11,8 @@ namespace py = pybind11;
 PYBIND11_MAKE_OPAQUE(std::vector<Mass<3>>);
 PYBIND11_MAKE_OPAQUE(std::vector<Fix<3>>);
 PYBIND11_MAKE_OPAQUE(std::vector<Spring>);
+PYBIND11_MAKE_OPAQUE(std::vector<DistanceConstraint>);
+
 
 PYBIND11_MODULE(mass_spring, m) {
     m.doc() = "mass-spring-system simulator"; 
@@ -76,8 +78,15 @@ PYBIND11_MODULE(mass_spring, m) {
     
     py::bind_vector<std::vector<Mass<3>>>(m, "Masses3d");
     py::bind_vector<std::vector<Fix<3>>>(m, "Fixes3d");
-    py::bind_vector<std::vector<Spring>>(m, "Springs");        
+    py::bind_vector<std::vector<Spring>>(m, "Springs");  
     
+    py::bind_vector<std::vector<DistanceConstraint>>(m, "Joints");
+
+    py::class_<DistanceConstraint>(m, "DistanceConstraint")
+      .def(py::init<Connector, Connector, double>())
+      .def_readonly("connectors", &DistanceConstraint::connectors)
+      .def_readonly("distance", &DistanceConstraint::distance);
+
     
     py::class_<MassSpringSystem<2>> (m, "MassSpringSystem2d")
       .def(py::init<>())
@@ -97,6 +106,11 @@ PYBIND11_MODULE(mass_spring, m) {
       .def("add", [](MassSpringSystem<3> & mss, Mass<3> m) { return mss.addMass(m); })
       .def("add", [](MassSpringSystem<3> & mss, Fix<3> f) { return mss.addFix(f); })
       .def("add", [](MassSpringSystem<3> & mss, Spring s) { return mss.addSpring(s); })
+
+      .def("add", [](MassSpringSystem<3> & mss, DistanceConstraint j) { return mss.addJoint(j); })
+      .def_property_readonly("joints", [](MassSpringSystem<3> & mss) -> auto& { return mss.joints(); })
+
+
       .def_property_readonly("masses", [](MassSpringSystem<3> & mss) -> auto& { return mss.masses(); })
       .def_property_readonly("fixes", [](MassSpringSystem<3> & mss) -> auto& { return mss.fixes(); })
       .def_property_readonly("springs", [](MassSpringSystem<3> & mss) -> auto& { return mss.springs(); })
@@ -106,25 +120,66 @@ PYBIND11_MODULE(mass_spring, m) {
       })
       
       .def("getState", [] (MassSpringSystem<3> & mss) {
-        Vector<> x(3*mss.masses().size());
-        Vector<> dx(3*mss.masses().size());
-        Vector<> ddx(3*mss.masses().size());
-        mss.getState (x, dx, ddx);
+
+        size_t nm = mss.masses().size();
+        size_t nj = mss.joints().size();
+
+        Vector<> x(3*nm + nj);
+        Vector<> dx(3*nm + nj);
+        Vector<> ddx(3*nm + nj);
+
+        
+        // Vector<> x(3*mss.masses().size());
+        // Vector<> dx(3*mss.masses().size());
+        // Vector<> ddx(3*mss.masses().size());
+
+        mss.getState(x.range(0, 3*nm),
+               dx.range(0, 3*nm),
+               ddx.range(0, 3*nm));
+
+        // initialize lambda part
+        x.range(3*nm, 3*nm + nj) = 0.0;
+
+        // mss.getState (x, dx, ddx);
         return std::vector<double>(x);
       })
 
       .def("simulate", [](MassSpringSystem<3> & mss, double tend, size_t steps) {
-        Vector<> x(3*mss.masses().size());
-        Vector<> dx(3*mss.masses().size());
-        Vector<> ddx(3*mss.masses().size());
+        // Vector<> x(3*mss.masses().size());
+        // Vector<> dx(3*mss.masses().size());
+        // Vector<> ddx(3*mss.masses().size());
+
+        size_t nm = mss.masses().size();
+        size_t nj = mss.joints().size();
+
+        Vector<> x(3*nm + nj);
+        Vector<> dx(3*nm + nj);
+        Vector<> ddx(3*nm + nj);
         mss.getState (x, dx, ddx);
+
+        mss.getState(x.range(0, 3*nm),
+               dx.range(0, 3*nm),
+               ddx.range(0, 3*nm));
+
+        // init lambdas (and their derivatives) to 0
+        x.range(3*nm, 3*nm + nj) = 0.0;
+        dx.range(3*nm, 3*nm + nj) = 0.0;
+        ddx.range(3*nm, 3*nm + nj) = 0.0;
 
         auto mss_func = std::make_shared<MSS_Function<3>> (mss);
         auto mass = std::make_shared<IdentityFunction> (x.size());
+        
 
         SolveODE_Alpha(tend, steps, 0.8, x, dx, ddx, mss_func, mass);
+        
+        mss.setState(x.range(0, 3*nm),
+                    dx.range(0, 3*nm),
+                    ddx.range(0, 3*nm));
 
-        mss.setState (x, dx, ddx);  
+                    
+        // mss.setState (x, dx, ddx);  
+
+      
     });
 
 
