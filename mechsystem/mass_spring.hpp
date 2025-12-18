@@ -51,12 +51,24 @@ public:
   std::array<Connector,2> connectors;
 };
 
+
+class DistanceConstraint
+{
+public:
+  std::array<Connector,2> connectors;
+  double distance;
+  DistanceConstraint (Connector c1, Connector c2, double dist)
+    : connectors{{c1,c2}}, distance(dist) { }
+};
+
+
 template <int D>
 class MassSpringSystem
 {
   std::vector<Fix<D>> m_fixes;
   std::vector<Mass<D>> m_masses;
   std::vector<Spring> m_springs;
+  std::vector<DistanceConstraint> m_joints;
   Vec<D> m_gravity=0.0;
 public:
   void setGravity (Vec<D> gravity) { m_gravity = gravity; }
@@ -80,9 +92,16 @@ public:
     return m_springs.size()-1;
   }
 
+  size_t addJoint (DistanceConstraint j)
+  {
+    m_joints.push_back (j);
+    return m_joints.size()-1;
+  }
+
   auto & fixes() { return m_fixes; } 
   auto & masses() { return m_masses; } 
   auto & springs() { return m_springs; }
+  auto & joints() { return m_joints; }
 
   void getState (VectorView<> values, VectorView<> dvalues, VectorView<> ddvalues)
   {
@@ -140,9 +159,9 @@ public:
   MSS_Function (MassSpringSystem<D> & _mss)
     : mss(_mss) { }
 
-  virtual size_t dimX() const override { return D*mss.masses().size(); }
-  virtual size_t dimF() const override{ return D*mss.masses().size(); }
-
+  virtual size_t dimX() const override { return D*mss.masses().size() + mss.constraints().size(); }
+  virtual size_t dimF() const override { return D*mss.masses().size() + mss.constraints().size(); }
+  
   virtual void evaluate (VectorView<double> x, VectorView<double> f) const override
   {
     f = 0.0;
@@ -176,6 +195,38 @@ public:
 
     for (size_t i = 0; i < mss.masses().size(); i++)
       fmat.row(i) *= 1.0/mss.masses()[i].mass;
+  }
+
+  for (auto joint : mss.joints())
+  {
+    auto [c1,c2] = joint.connectors;
+    Vec<D> p1, p2; // start and end point of the spring
+    if (c1.type == Connector::FIX)
+      p1 = mss.fixes()[c1.nr].pos; //fix coordinates of the fix
+    else
+      p1 = xmat.row(c1.nr); // coord of a mass
+    if (c2.type == Connector::FIX) //ending point
+      p2 = mss.fixes()[c2.nr].pos;
+    else
+      p2 = xmat.row(c2.nr);
+
+    // double force = spring.stiffness * (norm(p1-p2)-spring.length);
+    // Vec<D> dir12 = 1.0/norm(p1-p2) * (p2-p1);
+    // if (c1.type == Connector::MASS)
+    //   fmat.row(c1.nr) += force*dir12;
+    // if (c2.type == Connector::MASS)
+    //   fmat.row(c2.nr) -= force*dir12;
+
+    //how to calculate differential equation for distance constraint? 
+    Vec<D> diff = p1 - p2;
+    if (c1.type == Connector::MASS)
+        fmat.row(c1.nr) += (2 * lambda) * diff;
+    if (c2.type == Connector::MASS)
+        fmat.row(c2.nr) -= (2 * lambda) * diff;
+    
+    f(D * numMasses + i) = dot(p1 - p2, p1 - p2) - con.length * con.length;
+
+    
   }
   
   virtual void evaluateDeriv (VectorView<double> x, MatrixView<double> df) const override
