@@ -4,6 +4,9 @@
 #include <nonlinfunc.hpp>
 #include <timestepper.hpp>
 #include <array>
+#include <ostream>
+#include <cstddef>
+
 
 
 using namespace ASC_ode;
@@ -164,108 +167,173 @@ public:
 
   virtual size_t dimX() const override { return D*mss.masses().size() + mss.joints().size(); }
   virtual size_t dimF() const override { return D*mss.masses().size() + mss.joints().size(); }
-  
+
+
   virtual void evaluate (VectorView<double> x, VectorView<double> f) const override
   {
     f = 0.0;
-    //number of masses and joints
-    size_t nm = mss.masses().size();
-    size_t nj = mss.joints().size();
 
-  // x - solution vector is now cosisting of positions; lambdas
-  auto xmat    = x.range(0, nm*D).asMatrix(nm, D);
-  auto lambdas = x.range(nm*D, nm*D + nj);
+    const size_t nm = mss.masses().size();
+    const size_t nj = mss.joints().size();
 
-  // f - force vector now consisting of forces; constraint residuals
-  auto fmat = f.range(0, nm*D).asMatrix(nm, D);
-  auto gres = f.range(nm*D, nm*D + nj);
+    // x = [positions | lambdas]
+    auto xmat    = x.range(0, nm*D).asMatrix(nm, D);
+    auto lambdas = x.range(nm*D, nm*D + nj);
 
-    // auto xmat = x.asMatrix(mss.masses().size(), D);
-    // auto fmat = f.asMatrix(mss.masses().size(), D);
+    // f = [accelerations | constraint residuals]
+    auto fmat = f.range(0, nm*D).asMatrix(nm, D);
+    auto gres = f.range(nm*D, nm*D + nj);
 
-    for (size_t i = 0; i < mss.masses().size(); i++)
-      fmat.row(i) = mss.masses()[i].mass*mss.getGravity();
+    // gravity (force)
+    for (size_t i = 0; i < nm; i++)
+      fmat.row(i) = mss.masses()[i].mass * mss.getGravity();
 
+    // spring forces
     for (auto spring : mss.springs())
-      {
-        auto [c1,c2] = spring.connectors;
-        Vec<D> p1, p2;
-        if (c1.type == Connector::FIX)
-          p1 = mss.fixes()[c1.nr].pos;
-        else
-          p1 = xmat.row(c1.nr);
-        if (c2.type == Connector::FIX)
-          p2 = mss.fixes()[c2.nr].pos;
-        else
-          p2 = xmat.row(c2.nr);
+    {
+      auto [c1,c2] = spring.connectors;
 
-        double force = spring.stiffness * (norm(p1-p2)-spring.length);
-        Vec<D> dir12 = 1.0/norm(p1-p2) * (p2-p1);
-        if (c1.type == Connector::MASS)
-          fmat.row(c1.nr) += force*dir12;
-        if (c2.type == Connector::MASS)
-          fmat.row(c2.nr) -= force*dir12;
-      }
+      Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
+      Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
 
+      Vec<D> d = p2 - p1;
+      double L = norm(d);
+      if (L == 0.0) continue;
+
+      Vec<D> dir12 = (1.0 / L) * d;
+      double force = spring.stiffness * (L - spring.length);
+
+      if (c1.type == Connector::MASS) fmat.row(c1.nr) += force * dir12;
+      if (c2.type == Connector::MASS) fmat.row(c2.nr) -= force * dir12;
+    }
+
+    // constraint forces + residuals
     for (size_t j = 0; j < nj; j++)
-    // for (auto joint : mss.joints())
     {
       auto joint = mss.joints()[j];
       auto [c1,c2] = joint.connectors;
-      Vec<D> p1, p2; // start and end point of the spring
-      if (c1.type == Connector::FIX)
-        p1 = mss.fixes()[c1.nr].pos; //fix coordinates of the fix
-      else
-        p1 = xmat.row(c1.nr); // coord of a mass
-      if (c2.type == Connector::FIX) //ending point
-        p2 = mss.fixes()[c2.nr].pos;
-      else
-        p2 = xmat.row(c2.nr);
 
-      // double force = spring.stiffness * (norm(p1-p2)-spring.length);
-      // Vec<D> dir12 = 1.0/norm(p1-p2) * (p2-p1);
-      // if (c1.type == Connector::MASS)
-      //   fmat.row(c1.nr) += force*dir12;
-      // if (c2.type == Connector::MASS)
-      //   fmat.row(c2.nr) -= force*dir12;
-
+      Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
+      Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
 
       Vec<D> diff = p1 - p2;
       double lambda = lambdas(j);
-      if (c1.type == Connector::MASS)
-          fmat.row(c1.nr) += (2 * lambda) * diff;
-      if (c2.type == Connector::MASS)
-          fmat.row(c2.nr) -= (2 * lambda) * diff;
-      
+
+      // Lagrange multiplier force: ± 2 λ (p1 - p2)
+      if (c1.type == Connector::MASS) fmat.row(c1.nr) += (2.0 * lambda) * diff;
+      if (c2.type == Connector::MASS) fmat.row(c2.nr) -= (2.0 * lambda) * diff;
+
+      // constraint residual: |p1-p2|^2 - d^2
       gres(j) = dot(diff, diff) - joint.distance * joint.distance;
-      
     }
 
-
-    // from forces to accelerations
-    for (size_t i = 0; i < mss.masses().size(); i++)
-      fmat.row(i) *= 1.0/mss.masses()[i].mass;
-
-
-
+    // forces -> accelerations
+    for (size_t i = 0; i < nm; i++)
+      fmat.row(i) *= 1.0 / mss.masses()[i].mass;
   }
-  
-  virtual void evaluateDeriv (VectorView<double> x, MatrixView<double> df) const override
+
+
+virtual void evaluateDeriv (VectorView<double> x, MatrixView<double> df) const override
   {
-    // TODO: exact differentiation
-    double eps = 1e-8;
-    Vector<> xl(dimX()), xr(dimX()), fl(dimF()), fr(dimF());
-    for (size_t i = 0; i < dimX(); i++)
+    const size_t nm = mss.masses().size();
+    const size_t nj = mss.joints().size();
+    const size_t n  = D * nm + nj;
+
+    // zero df
+    for (size_t i = 0; i < df.rows(); i++)
+      for (size_t j = 0; j < df.cols(); j++)
+        df(i,j) = 0.0;
+
+    auto xmat = x.range(0, D * nm).asMatrix(nm, D);
+
+    // Springs contribution
+    for (auto spring : mss.springs())
+    {
+      auto [c1, c2] = spring.connectors;
+
+      Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
+      Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
+
+      Vec<D> diff = p1 - p2;
+      double L = norm(diff);
+      if (L == 0.0) continue;
+
+      // unit direction from p2 -> p1
+      Vec<D> dir = diff;
+      for (size_t k = 0; k < D; k++)
+        dir(k) /= L;
+
+      // K = k * (I - dir*dir^T)
+      for (int a = 0; a < D; a++)
+        for (int b = 0; b < D; b++)
+        {
+          double val = spring.stiffness * ((a == b ? 1.0 : 0.0) - dir(a) * dir(b));
+
+          if (c1.type == Connector::MASS && c2.type == Connector::MASS)
+          {
+            df(D * c1.nr + a, D * c1.nr + b) += val;
+            df(D * c1.nr + a, D * c2.nr + b) -= val;
+            df(D * c2.nr + a, D * c1.nr + b) -= val;
+            df(D * c2.nr + a, D * c2.nr + b) += val;
+          }
+          else if (c1.type == Connector::MASS && c2.type == Connector::FIX)
+          {
+            df(D * c1.nr + a, D * c1.nr + b) += val;
+          }
+          else if (c1.type == Connector::FIX && c2.type == Connector::MASS)
+          {
+            df(D * c2.nr + a, D * c2.nr + b) += val;
+          }
+        }
+    }
+
+    // Distance constraints (your m_joints) contribution
+    for (size_t i = 0; i < nj; i++)
+    {
+      auto & joint = mss.joints()[i];
+      auto [c1, c2] = joint.connectors;
+
+      Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
+      Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
+
+      Vec<D> diff = p1 - p2;
+
+      // Column index of lambda_i in x:
+      const size_t col_lambda = D * nm + i;
+      // Row index of residual g_i in f:
+      const size_t row_g      = D * nm + i;
+
+      // derivatives involving lambda in force rows:
+      for (int a = 0; a < D; a++)
       {
-        xl = x;
-        xl(i) -= eps;
-        xr = x;
-        xr(i) += eps;
-        evaluate (xl, fl);
-        evaluate (xr, fr);
-        df.col(i) = 1/(2*eps) * (fr-fl);
+        if (c1.type == Connector::MASS)
+          df(D * c1.nr + a, col_lambda) += 2.0 * diff(a);
+        if (c2.type == Connector::MASS)
+          df(D * c2.nr + a, col_lambda) -= 2.0 * diff(a);
       }
+
+      // derivatives of residual g = ||p1-p2||^2 - d^2 w.r.t positions
+      for (int a = 0; a < D; a++)
+      {
+        if (c1.type == Connector::MASS)
+          df(row_g, D * c1.nr + a) += 2.0 * diff(a);
+        if (c2.type == Connector::MASS)
+          df(row_g, D * c2.nr + a) -= 2.0 * diff(a);
+      }
+
+      // Note: dg/dlambda = 0 (so df(row_g, col_lambda) stays 0)
+    }
+
+    // Convert force-rows -> acceleration-rows by dividing by mass
+    for (size_t i = 0; i < nm; i++)
+    {
+      const double m = mss.masses()[i].mass;
+      for (size_t a = 0; a < D; a++)
+        for (size_t j = 0; j < n; j++)
+          df(D * i + a, j) /= m;
+    }
   }
+
   
 };
 
