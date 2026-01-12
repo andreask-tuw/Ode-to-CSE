@@ -57,3 +57,27 @@ mss.masses[0].mass = 5
 
 for m in mss.masses:
     print (m.mass, m.pos)
+
+
+def print_dist(tag):
+    s = mss.getState()     
+    pA = s[0:3]
+    pB = s[3:6]
+    d = math.dist(pA, pB)
+    print(tag, "dist =", d)
+
+
+
+tend, steps = 0.1, 10
+full = mss.simulate(tend, steps)
+
+nm = len(mss.masses)
+n_mass = 3 * nm
+nj = len(mss.joints)
+
+print("lambdas after 1 =", full[n_mass:n_mass+nj])
+
+
+full = mss.simulate(tend, steps)
+print_dist("after 2")
+print("lambdas after 2 =", full[n_mass:n_mass+nj])

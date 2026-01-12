@@ -5,6 +5,7 @@
 
 #include "mass_spring.hpp"
 #include "Newmark.hpp"
+#include "timestepper.hpp"
 
 namespace py = pybind11;
 
@@ -120,67 +121,42 @@ PYBIND11_MODULE(mass_spring, m) {
       })
       
       .def("getState", [] (MassSpringSystem<3> & mss) {
-
-        size_t nm = mss.masses().size();
-        size_t nj = mss.joints().size();
-
-        Vector<> x(3*nm + nj);
-        Vector<> dx(3*nm + nj);
-        Vector<> ddx(3*nm + nj);
-
-        
-        // Vector<> x(3*mss.masses().size());
-        // Vector<> dx(3*mss.masses().size());
-        // Vector<> ddx(3*mss.masses().size());
-
-        mss.getState(x.range(0, 3*nm),
-               dx.range(0, 3*nm),
-               ddx.range(0, 3*nm));
-
-        // initialize lambda part
-        x.range(3*nm, 3*nm + nj) = 0.0;
-
-        // mss.getState (x, dx, ddx);
+        Vector<> x(3 * mss.masses().size());
+        Vector<> dx(3 * mss.masses().size());
+        Vector<> ddx(3 * mss.masses().size());
+        mss.getState(x, dx, ddx);
         return std::vector<double>(x);
       })
 
+
       .def("simulate", [](MassSpringSystem<3> & mss, double tend, size_t steps) {
-        // Vector<> x(3*mss.masses().size());
-        // Vector<> dx(3*mss.masses().size());
-        // Vector<> ddx(3*mss.masses().size());
 
-        size_t nm = mss.masses().size();
-        size_t nj = mss.joints().size();
+  size_t n_mass = 3 * mss.masses().size();
+  size_t n_con  = mss.joints().size();
+  size_t dim    = n_mass + n_con;
 
-        Vector<> x(3*nm + nj);
-        Vector<> dx(3*nm + nj);
-        Vector<> ddx(3*nm + nj);
-        mss.getState (x, dx, ddx);
+  Vector<> x(dim), dx(dim), ddx(dim);
+  x = 0.0; dx = 0.0; ddx = 0.0;
 
-        mss.getState(x.range(0, 3*nm),
-               dx.range(0, 3*nm),
-               ddx.range(0, 3*nm));
+  // fill only mass part
+  mss.getState(x.range(0, n_mass), dx.range(0, n_mass), ddx.range(0, n_mass));
 
-        // init lambdas (and their derivatives) to 0
-        x.range(3*nm, 3*nm + nj) = 0.0;
-        dx.range(3*nm, 3*nm + nj) = 0.0;
-        ddx.range(3*nm, 3*nm + nj) = 0.0;
+  auto mss_func = std::make_shared<MSS_Function<3>>(mss);
 
-        auto mss_func = std::make_shared<MSS_Function<3>> (mss);
-        auto mass = std::make_shared<IdentityFunction> (x.size());
-        
+  // IMPORTANT: identity on mass part, zero on constraint part
+  auto mass = std::make_shared<Projector>(dim, 0, n_mass);
 
-        SolveODE_Alpha(tend, steps, 0.8, x, dx, ddx, mss_func, mass);
-        
-        mss.setState(x.range(0, 3*nm),
-                    dx.range(0, 3*nm),
-                    ddx.range(0, 3*nm));
+  SolveODE_Alpha(tend, steps, 0.5, x, dx, ddx, mss_func, mass);
 
-                    
-        // mss.setState (x, dx, ddx);  
+  // write back only mass state
+  mss.setState(x.range(0, n_mass), dx.range(0, n_mass), ddx.range(0, n_mass));
 
-      
-    });
+  // return full x (positions + lambdas)
+  return std::vector<double>(x);
+})
+      ;
+
+
 
 
   
