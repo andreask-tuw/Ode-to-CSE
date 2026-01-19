@@ -234,159 +234,107 @@ public:
 
 
 virtual void evaluateDeriv (VectorView<double> x, MatrixView<double> df) const override
-{
-  const size_t nm = mss.masses().size();
-  const size_t nj = mss.joints().size();
-  const size_t n  = D * nm + nj;
-
-  // zero df
-  for (size_t r = 0; r < df.rows(); r++)
-    for (size_t c = 0; c < df.cols(); c++)
-      df(r,c) = 0.0;
-
-  auto xmat    = x.range(0, D*nm).asMatrix(nm, D);
-  auto lambdas = x.range(D*nm, D*nm + nj);
-
-  auto add_block = [&](size_t row_m, size_t col_m, const double M[D][D], double scale=1.0)
   {
-    for (int a=0; a<D; a++)
-      for (int b=0; b<D; b++)
-        df(D*row_m + a, D*col_m + b) += scale * M[a][b];
-  };
+    const size_t nm = mss.masses().size();
+    const size_t nj = mss.joints().size();
+    const size_t n  = D * nm + nj;
 
-  // -------------------
-  // Springs: correct Jacobian
-  // -------------------
-  for (auto spring : mss.springs())
-  {
-    auto [c1, c2] = spring.connectors;
+    // zero df
+    for (size_t i = 0; i < df.rows(); i++)
+      for (size_t j = 0; j < df.cols(); j++)
+        df(i,j) = 0.0;
 
-    Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
-    Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
+    auto xmat = x.range(0, D * nm).asMatrix(nm, D);
 
-    Vec<D> dvec = p2 - p1;             // d = p2 - p1  (matches evaluate())
-    double L = norm(dvec);
-    if (L == 0.0) continue;
-
-    double L0 = spring.length;
-    double k  = spring.stiffness;
-
-    // u = d/L
-    double u[D];
-    for (int a=0; a<D; a++) u[a] = dvec(a) / L;
-
-    // Kd = dF/dd = k * [ (1 - L0/L) I + (L0/L) (u u^T) ]
-    double Kd[D][D];
-    double alpha = (1.0 - L0 / L);
-    double beta  = (L0 / L);
-    for (int a=0; a<D; a++)
-      for (int b=0; b<D; b++)
-        Kd[a][b] = k * ( (a==b ? alpha : 0.0) + beta * u[a] * u[b] );
-
-    // Force on c1 (if MASS) is +F, with F = k*(L-L0)*u = k*(1-L0/L)*d
-    // Since d = p2 - p1:
-    // dF/dp1 = -Kd, dF/dp2 = +Kd
-    if (c1.type == Connector::MASS)
+    // Springs contribution
+    for (auto spring : mss.springs())
     {
-      if (c1.type == Connector::MASS && c1.type == Connector::MASS) {} // noop
+      auto [c1, c2] = spring.connectors;
 
-      if (c1.type == Connector::MASS && c2.type == Connector::MASS)
-      {
-        add_block(c1.nr, c1.nr, Kd, -1.0);
-        add_block(c1.nr, c2.nr, Kd, +1.0);
-      }
-      else if (c2.type == Connector::FIX)
-      {
-        add_block(c1.nr, c1.nr, Kd, -1.0);
-      }
+      Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
+      Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
+
+      Vec<D> diff = p1 - p2;
+      double L = norm(diff);
+      if (L == 0.0) continue;
+
+      // unit direction from p2 -> p1
+      Vec<D> dir = diff;
+      for (size_t k = 0; k < D; k++)
+        dir(k) /= L;
+
+      // K = k * (I - dir*dir^T)
+      for (int a = 0; a < D; a++)
+        for (int b = 0; b < D; b++)
+        {
+          double val = spring.stiffness * ((a == b ? 1.0 : 0.0) - dir(a) * dir(b));
+
+          if (c1.type == Connector::MASS && c2.type == Connector::MASS)
+          {
+            df(D * c1.nr + a, D * c1.nr + b) += val;
+            df(D * c1.nr + a, D * c2.nr + b) -= val;
+            df(D * c2.nr + a, D * c1.nr + b) -= val;
+            df(D * c2.nr + a, D * c2.nr + b) += val;
+          }
+          else if (c1.type == Connector::MASS && c2.type == Connector::FIX)
+          {
+            df(D * c1.nr + a, D * c1.nr + b) += val;
+          }
+          else if (c1.type == Connector::FIX && c2.type == Connector::MASS)
+          {
+            df(D * c2.nr + a, D * c2.nr + b) += val;
+          }
+        }
     }
 
-    if (c2.type == Connector::MASS)
+    // Distance constraints (your m_joints) contribution
+    for (size_t i = 0; i < nj; i++)
     {
-      // Force on c2 is -F, so derivatives are opposite:
-      // d(-F)/dp1 = +Kd, d(-F)/dp2 = -Kd
-      if (c1.type == Connector::MASS && c2.type == Connector::MASS)
+      auto & joint = mss.joints()[i];
+      auto [c1, c2] = joint.connectors;
+
+      Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
+      Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
+
+      Vec<D> diff = p1 - p2;
+
+      // Column index of lambda_i in x:
+      const size_t col_lambda = D * nm + i;
+      // Row index of residual g_i in f:
+      const size_t row_g      = D * nm + i;
+
+      // derivatives involving lambda in force rows:
+      for (int a = 0; a < D; a++)
       {
-        add_block(c2.nr, c1.nr, Kd, +1.0);
-        add_block(c2.nr, c2.nr, Kd, -1.0);
+        if (c1.type == Connector::MASS)
+          df(D * c1.nr + a, col_lambda) += 2.0 * diff(a);
+        if (c2.type == Connector::MASS)
+          df(D * c2.nr + a, col_lambda) -= 2.0 * diff(a);
       }
-      else if (c1.type == Connector::FIX)
+
+      // derivatives of residual g = ||p1-p2||^2 - d^2 w.r.t positions
+      for (int a = 0; a < D; a++)
       {
-        add_block(c2.nr, c2.nr, Kd, -1.0);
+        if (c1.type == Connector::MASS)
+          df(row_g, D * c1.nr + a) += 2.0 * diff(a);
+        if (c2.type == Connector::MASS)
+          df(row_g, D * c2.nr + a) -= 2.0 * diff(a);
       }
+
+      // Note: dg/dlambda = 0 (so df(row_g, col_lambda) stays 0)
+    }
+
+    // Convert force-rows -> acceleration-rows by dividing by mass
+    for (size_t i = 0; i < nm; i++)
+    {
+      const double m = mss.masses()[i].mass;
+      for (size_t a = 0; a < D; a++)
+        for (size_t j = 0; j < n; j++)
+          df(D * i + a, j) /= m;
     }
   }
 
-  // -------------------
-  // Distance constraints: add missing position-derivatives in FORCE rows
-  // -------------------
-  for (size_t i = 0; i < nj; i++)
-  {
-    auto & joint = mss.joints()[i];
-    auto [c1, c2] = joint.connectors;
-
-    Vec<D> p1 = (c1.type == Connector::FIX) ? mss.fixes()[c1.nr].pos : xmat.row(c1.nr);
-    Vec<D> p2 = (c2.type == Connector::FIX) ? mss.fixes()[c2.nr].pos : xmat.row(c2.nr);
-
-    Vec<D> diff = p1 - p2;
-    double lam = lambdas(i);
-
-    const size_t col_lambda = D*nm + i;  // lambda column
-    const size_t row_g      = D*nm + i;  // residual row
-
-    // --- FORCE rows: dF/dlambda (you already had, keep it)
-    for (int a = 0; a < D; a++)
-    {
-      if (c1.type == Connector::MASS)
-        df(D*c1.nr + a, col_lambda) += 2.0 * diff(a);
-      if (c2.type == Connector::MASS)
-        df(D*c2.nr + a, col_lambda) -= 2.0 * diff(a);
-    }
-
-    // --- FORCE rows: dF/dp terms (THIS WAS MISSING)
-    // F1 =  2*lam*(p1 - p2)
-    // F2 = -2*lam*(p1 - p2)
-    double I[D][D] = {};
-    for (int a=0; a<D; a++) I[a][a] = 1.0;
-
-    if (c1.type == Connector::MASS && c2.type == Connector::MASS)
-    {
-      add_block(c1.nr, c1.nr, I, +2.0*lam);
-      add_block(c1.nr, c2.nr, I, -2.0*lam);
-
-      add_block(c2.nr, c1.nr, I, -2.0*lam);
-      add_block(c2.nr, c2.nr, I, +2.0*lam);
-    }
-    else if (c1.type == Connector::MASS && c2.type == Connector::FIX)
-    {
-      add_block(c1.nr, c1.nr, I, +2.0*lam);
-    }
-    else if (c1.type == Connector::FIX && c2.type == Connector::MASS)
-    {
-      add_block(c2.nr, c2.nr, I, +2.0*lam);
-    }
-
-    // --- residual row: dg/dp (you already had, keep it)
-    for (int a = 0; a < D; a++)
-    {
-      if (c1.type == Connector::MASS)
-        df(row_g, D*c1.nr + a) += 2.0 * diff(a);
-      if (c2.type == Connector::MASS)
-        df(row_g, D*c2.nr + a) -= 2.0 * diff(a);
-    }
-    // dg/dlambda = 0
-  }
-
-  // -------------------
-  // Convert force rows to acceleration rows (divide by mass)
-  // -------------------
-  for (size_t mi = 0; mi < nm; mi++)
-  {
-    const double m = mss.masses()[mi].mass;
-    for (int a = 0; a < D; a++)
-      for (size_t j = 0; j < n; j++)
-        df(D*mi + a, j) /= m;
-  }
-}
+  
 };
+
 #endif
