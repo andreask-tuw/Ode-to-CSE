@@ -32,6 +32,16 @@ PYBIND11_MODULE(mass_spring, m) {
       return Mass<2>{m, { p[0], p[1] }};
     });
 
+    m.def("Mass", [](double m, std::array<double,3> p, std::array<double,3> v)
+    {
+      Mass<3> mm;
+      mm.mass = m;
+      mm.pos  = Vec<3>{p[0], p[1], p[2]};
+      mm.vel  = Vec<3>{v[0], v[1], v[2]};
+      // acc stays 0.0 by default
+      return mm;
+    });
+
     
     py::class_<Mass<3>> (m, "Mass3d")
       .def_property("mass",
