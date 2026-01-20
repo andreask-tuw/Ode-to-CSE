@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-methods = ['ExplicitEuler', 'ImprovedEuler', 'ImplicitEuler', 'CrankNicholson', 'IRK']
+methods = ['ExplicitEuler', 'ImprovedEuler', 'ImplicitEuler', 'CrankNicholson', 'IRK', 'ERK']
 
 filenames = [f'../build/output_test_ode_{method}.txt'
             for method

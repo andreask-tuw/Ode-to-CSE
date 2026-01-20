@@ -6,7 +6,7 @@
 #include <timestepper.hpp>
 #include <autodiff.hpp>
 #include <implicitRK.hpp>
-// #include <explicitRK.hpp>
+#include <explicitRK.hpp>
 
 using namespace ASC_ode;
 
@@ -207,6 +207,11 @@ int main()
   }
   
 
+  // reset initial condition for each method
+  y = y0;
+
+
+  /*** IMPLICIT RUNGE-KUTTA ***/
 
   double omega = 50*M_PI;
   double time_const = 1/omega;
@@ -228,6 +233,31 @@ int main()
     stepper5.doStep(tau, y);
     // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
     outfile5 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+  }
+
+
+  // reset initial condition for each method
+  y = y0;
+
+
+  /*** EXPLICIT RUNGE-KUTTA ***/
+
+  // Use a valid explicit tableau (classical RK4).
+  auto [ERK4a, ERK4b, ERK4c] = ERK_RK4_Tableau();
+  ExplicitRungeKutta stepper6(rhs, ERK4a, ERK4b, ERK4c);
+
+  std::string filename6 = "output_test_ode_ERK.txt";
+  std::ofstream outfile6(filename6);
+
+  std::cout << "# method: " << "Explicit Runge Kutta" << "\n";
+  // std::cout << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+  outfile6 << 0.0 << "  " << y(0) << " " << y(1) << std::endl;
+
+  for (int i = 0; i < steps; i++)
+  {
+    stepper6.doStep(tau, y);
+    // std::cout << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
+    outfile6 << (i+1) * tau << "  " << y(0) << " " << y(1) << std::endl;
   }
 
 
